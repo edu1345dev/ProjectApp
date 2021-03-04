@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.FileProvider
 import androidx.core.net.toFile
@@ -18,13 +19,15 @@ import java.io.File
 class MainActivity : AppCompatActivity() {
     companion object {
         const val FILE_AUTHORITY = "com.example.projectapp"
+        const val TAG = "MainActivity"
     }
 
-    val photo by lazy { findViewById<AppCompatImageView>(R.id.picture) }
-    val description by lazy { findViewById<TextInputLayout>(R.id.pic_description) }
-    val name by lazy { findViewById<TextInputLayout>(R.id.pic_name) }
-    val share by lazy { findViewById<FloatingActionButton>(R.id.share) }
-    val capture by lazy { findViewById<FloatingActionButton>(R.id.capture) }
+    private val photo by lazy { findViewById<AppCompatImageView>(R.id.picture) }
+    private val description by lazy { findViewById<TextInputLayout>(R.id.pic_description) }
+    private val name by lazy { findViewById<TextInputLayout>(R.id.pic_name) }
+    private val share by lazy { findViewById<FloatingActionButton>(R.id.share) }
+    private val capture by lazy { findViewById<FloatingActionButton>(R.id.capture) }
+
     var fileShare: File? = null
     private lateinit var sharedPreferencesHelper: SharedPreferencesHelper
     private lateinit var permissionsHelper: PermissionsHelper
@@ -41,10 +44,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         share.setOnClickListener {
-            if (validate()) shareFile(
-                name.editText!!.text.toString(),
-                description.editText!!.text.toString()
-            )
+            if (validate()) {
+                shareFile(
+                    name.editText!!.text.toString(),
+                    description.editText!!.text.toString()
+                )
+            }
         }
     }
 
@@ -59,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private fun openChooser() {
         val intentList = mutableListOf<Intent>()
 
+        //takePhotoIntent
         val takePhotoIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
 
         val file = FileHelper.createFileInStorage(this)
@@ -73,10 +79,14 @@ class MainActivity : AppCompatActivity() {
 
         takePhotoIntent.putExtra(MediaStore.EXTRA_OUTPUT, uri)
 
+
+
+        //pickImageIntent
         val pickIntent = Intent()
         pickIntent.type = "image/*"
         pickIntent.action = Intent.ACTION_GET_CONTENT
 
+        //Adiciona na lista de intents
         intentList.add(pickIntent)
         intentList.add(takePhotoIntent)
 
@@ -94,7 +104,7 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
         super.onActivityResult(requestCode, resultCode, intent)
 
-        if (requestCode == 200 && resultCode == Activity.RESULT_OK && (intent == null || intent.extras == null) && intent?.data == null) {
+        if (isIntentFromCamera(requestCode, resultCode, intent)) {
             val picture = BitmapFactory.decodeFile(fileShare?.path)
             photo.background = null
             photo.setImageBitmap(picture)
@@ -104,13 +114,26 @@ class MainActivity : AppCompatActivity() {
                 FILE_AUTHORITY,
                 fileShare!!
             )
-        } else if (requestCode == 200 && resultCode == Activity.RESULT_OK && intent?.data != null) {
-            val pic = intent.data as Uri
+        } else if (isIntentFromFiles(requestCode, resultCode, intent)) {
+            val pic = intent?.data as Uri
             uri = pic
             photo.background = null
             photo.setImageURI(pic)
         }
     }
+
+    private fun isIntentFromFiles(
+        requestCode: Int,
+        resultCode: Int,
+        intent: Intent?
+    ) = requestCode == 200 && resultCode == Activity.RESULT_OK && intent?.data != null
+
+    private fun isIntentFromCamera(
+        requestCode: Int,
+        resultCode: Int,
+        intent: Intent?
+    ) =
+        requestCode == 200 && resultCode == Activity.RESULT_OK && (intent == null || intent.extras == null) && intent?.data == null
 
 
     private fun shareFile(photoName: String, photoDescription: String) {
@@ -146,17 +169,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun validate(): Boolean {
-        return if (name.editText!!.text.isEmpty()) {
-            name.error = "Required field"
-            false
-        } else if (description.editText!!.text.isEmpty()) {
-            description.error = "Required field"
-            name.error = null
-            false
-        } else {
-            name.error = null
-            description.error = null
-            true
+        when {
+            name.editText!!.text.isEmpty() -> {
+                name.error = "Required field"
+                return false
+            }
+            description.editText!!.text.isEmpty() -> {
+                description.error = "Required field"
+                name.error = null
+                return false
+            }
+            else -> {
+                name.error = null
+                description.error = null
+                return true
+            }
         }
     }
 }
